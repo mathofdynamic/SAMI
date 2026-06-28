@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, Component } from 'react';
 import { DesignTokens } from '../types';
 import { tokensToCssVars } from '../utils';
 import { 
@@ -32,7 +32,48 @@ interface CanvasProps {
 interface PageConfig {
   id: string;
   name: string;
-  component: React.FC<{ tokens: DesignTokens; mode: 'light' | 'dark' }>;
+  component: React.FC<{ tokens: DesignTokens; mode: 'light' | 'dark'; breakpoint?: 'desktop' | 'tablet' | 'mobile' }>;
+}
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  pageName: string;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+}
+
+// Simple Error Boundary to isolate crashes in specific showcase page frames
+class CanvasErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null };
+
+  constructor(props: ErrorBoundaryProps) {
+    super(props);
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error(`Error rendering page ${this.props.pageName}:`, error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-6 bg-rose-950/80 text-rose-200 border border-rose-800 rounded-xl h-full flex flex-col items-center justify-center text-center gap-2 overflow-auto font-sans">
+          <span className="font-bold text-xs uppercase font-mono tracking-wider text-rose-300">Render Crash in Frame</span>
+          <span className="text-sm font-bold">{this.props.pageName}</span>
+          <p className="text-[10px] max-w-md font-mono bg-black/40 p-2.5 rounded border border-rose-900/40 text-rose-300 select-all whitespace-pre-wrap">{this.state.error?.message}</p>
+          <p className="text-[9px] text-rose-400 mt-1 font-mono">Check if any expected design token fields are missing or corrupted.</p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 export const Canvas: React.FC<CanvasProps> = ({ tokens }) => {
@@ -237,18 +278,18 @@ export const Canvas: React.FC<CanvasProps> = ({ tokens }) => {
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
         onMouseLeave={handleMouseUp}
-        className={`flex-1 relative overflow-hidden bg-zinc-900 bg-[radial-gradient(#1e293b_1.2px,transparent_1.2px)] [background-size:24px_24px] ${interactionMode === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
+        className={`flex-1 relative overflow-hidden bg-zinc-900 ${interactionMode === 'pan' ? 'cursor-grab active:cursor-grabbing' : 'cursor-default'}`}
       >
         {/* Dynamic style tag for Google Fonts loading */}
         <style>
           {`
-            @import url('https://fonts.googleapis.com/css2?family=${tokens.typography.fontHeading.replace(/ /g, '+')}:wght@400;500;600;700;800&family=${tokens.typography.fontBody.replace(/ /g, '+')}:wght@300;400;500;600&family=${tokens.typography.fontMono.replace(/ /g, '+')}:wght@400;500&display=swap');
+            @import url('https://fonts.googleapis.com/css2?family=${(tokens?.typography?.fontHeading || 'Outfit').replace(/ /g, '+')}:wght@400;500;600;700;800&family=${(tokens?.typography?.fontBody || 'Plus Jakarta Sans').replace(/ /g, '+')}:wght@300;400;500;600&family=${(tokens?.typography?.fontMono || 'JetBrains Mono').replace(/ /g, '+')}:wght@400;500&display=swap');
           `}
         </style>
 
         {/* Container that pans and zooms */}
         <div
-          className="absolute origin-top-left transition-transform duration-[40ms]"
+          className="absolute top-0 left-0 origin-top-left transition-transform duration-[40ms]"
           style={{
             transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
           }}
@@ -262,6 +303,7 @@ export const Canvas: React.FC<CanvasProps> = ({ tokens }) => {
               .map((page) => {
                 const activePageMode = pageModes[page.id] || globalMode;
                 const cssVars = tokensToCssVars(tokens, activePageMode);
+                const PageComponent = page.component;
 
                 return (
                   <div
@@ -326,7 +368,7 @@ export const Canvas: React.FC<CanvasProps> = ({ tokens }) => {
 
                     {/* Rendered Showcase Page Content (using CSS Variables inline scope!) */}
                     <div 
-                      className="border-x border-b border-[var(--color-border)] rounded-b-xl overflow-hidden shadow-[var(--shadow-ambient)] relative transition-all"
+                      className="border-x border-b border-[var(--color-border)] rounded-b-xl overflow-hidden shadow-[var(--shadow-ambient)] relative transition-all h-[500px]"
                       style={{ 
                         backgroundColor: 'var(--color-bg)',
                         // Enforce specific fonts inside
@@ -334,7 +376,9 @@ export const Canvas: React.FC<CanvasProps> = ({ tokens }) => {
                         fontSize: 'var(--font-size-base)',
                       }}
                     >
-                      <page.component tokens={tokens} mode={activePageMode} />
+                      <CanvasErrorBoundary pageName={page.name}>
+                        <PageComponent tokens={tokens} mode={activePageMode} breakpoint={breakpoint} />
+                      </CanvasErrorBoundary>
                     </div>
                   </div>
                 );

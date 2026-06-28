@@ -4,7 +4,9 @@ import { THEME_PRESETS } from '../presets';
 import { 
   getContrastRatio, 
   getWcagScore, 
-  generateColorRamp 
+  generateColorRamp,
+  getHexSaturation,
+  getHexHue
 } from '../utils';
 import { 
   Palette, 
@@ -19,7 +21,9 @@ import {
   ArrowCounterClockwise,
   ArrowClockwise,
   CloudArrowDown,
-  ArrowSquareOut
+  ArrowSquareOut,
+  Sliders,
+  ShieldCheck
 } from '@phosphor-icons/react';
 
 interface TokenEditorProps {
@@ -45,7 +49,7 @@ export const TokenEditor: React.FC<TokenEditorProps> = ({
   canRedo,
   onReset,
 }) => {
-  const [activeSection, setActiveSection] = useState<'presets' | 'color' | 'typography' | 'shape' | 'components' | 'motion'>('presets');
+  const [activeSection, setActiveSection] = useState<'presets' | 'color' | 'typography' | 'shape' | 'components' | 'motion' | 'dials' | 'audit'>('presets');
 
   const updateToken = (path: string, value: any) => {
     const keys = path.split('.');
@@ -71,6 +75,88 @@ export const TokenEditor: React.FC<TokenEditorProps> = ({
   
   const darkContrast = getContrastRatio(tokens.colors.dark.textPrimary, tokens.colors.dark.neutralBg);
   const darkWcag = getWcagScore(darkContrast);
+
+  // Slop Audit live calculations
+  const satLight = getHexSaturation(tokens.colors.light.accent);
+  const satDark = getHexSaturation(tokens.colors.dark.accent);
+  const accentSatPassed = satLight < 80 && satDark < 80;
+
+  const headingFontLower = tokens.typography.fontHeading.toLowerCase();
+  const bannedFonts = ['inter', 'roboto', 'arial', 'open sans', 'helvetica'];
+  const headingFontPassed = !bannedFonts.some(f => headingFontLower.includes(f));
+
+  const lightBgPure = tokens.colors.light.neutralBg.toLowerCase() === '#ffffff';
+  const lightTextPure = tokens.colors.light.textPrimary.toLowerCase() === '#000000';
+  const darkBgPure = tokens.colors.dark.neutralBg.toLowerCase() === '#000000';
+  const darkTextPure = tokens.colors.dark.textPrimary.toLowerCase() === '#ffffff';
+  const pureColorPassed = !lightBgPure && !lightTextPure && !darkBgPure && !darkTextPure;
+
+  const lightTextContrastPassed = lightContrast >= 4.5;
+  const darkTextContrastPassed = darkContrast >= 4.5;
+
+  const buttonContrastLight = getContrastRatio(tokens.colors.light.accent, tokens.colors.light.neutralBg);
+  const buttonContrastDark = getContrastRatio(tokens.colors.dark.accent, tokens.colors.dark.neutralBg);
+  const buttonContrastPassed = buttonContrastLight >= 4.5 && buttonContrastDark >= 4.5;
+
+  const hueLight = getHexHue(tokens.colors.light.accent);
+  const hueDark = getHexHue(tokens.colors.dark.accent);
+  const hueDiff = Math.abs(hueLight - hueDark);
+  const hueDiffNormalized = hueDiff > 180 ? 360 - hueDiff : hueDiff;
+  const singleAccentPassed = hueDiffNormalized <= 30;
+
+  const auditItems = [
+    {
+      id: 'accent-saturation',
+      name: 'Accent saturation < 80%',
+      passed: accentSatPassed,
+      value: `Light: ${satLight}%, Dark: ${satDark}%`,
+      tip: 'Reduce accent saturation below 80% to blend beautifully with neutrals.',
+    },
+    {
+      id: 'heading-font',
+      name: 'Premium Heading Font',
+      passed: headingFontPassed,
+      value: tokens.typography.fontHeading,
+      tip: 'Avoid generic fonts like Inter, Roboto, Arial, Open Sans, or Helvetica.',
+    },
+    {
+      id: 'pure-colors',
+      name: 'No pure #000000 or #ffffff',
+      passed: pureColorPassed,
+      value: `Bg: ${tokens.colors.light.neutralBg}/${tokens.colors.dark.neutralBg}`,
+      tip: 'Avoid pure black/white; use soft off-whites and rich charcoals.',
+    },
+    {
+      id: 'light-text-contrast',
+      name: 'Light Text Contrast >= 4.5:1',
+      passed: lightTextContrastPassed,
+      value: `${lightContrast.toFixed(2)}:1`,
+      tip: 'Increase contrast between text and light background for WCAG AA compliance.',
+    },
+    {
+      id: 'dark-text-contrast',
+      name: 'Dark Text Contrast >= 4.5:1',
+      passed: darkTextContrastPassed,
+      value: `${darkContrast.toFixed(2)}:1`,
+      tip: 'Increase contrast between text and dark background for WCAG AA compliance.',
+    },
+    {
+      id: 'button-contrast',
+      name: 'Button Text vs Fill Contrast >= 4.5:1',
+      passed: buttonContrastPassed,
+      value: `Light: ${buttonContrastLight.toFixed(2)}:1, Dark: ${buttonContrastDark.toFixed(2)}:1`,
+      tip: 'Ensure the accent button fill and label have high contrast ratio.',
+    },
+    {
+      id: 'single-accent',
+      name: 'Unified Brand Accent Hue',
+      passed: singleAccentPassed,
+      value: `Hue Diff: ${hueDiffNormalized.toFixed(0)}°`,
+      tip: 'Light and Dark accents should share a single cohesive brand hue (diff <= 30°).',
+    }
+  ];
+
+  const warnCount = auditItems.filter(item => !item.passed).length;
 
   return (
     <div className="w-full h-full flex flex-col bg-zinc-950 text-zinc-100 border-r border-zinc-900 overflow-hidden">
@@ -172,6 +258,29 @@ export const TokenEditor: React.FC<TokenEditorProps> = ({
             >
               <Clock size={18} />
               <span className="absolute left-16 top-1.5 bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] px-2 py-1 rounded hidden group-hover:block whitespace-nowrap z-50">Motion & Easings</span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('dials')}
+              className={`p-2 rounded-lg cursor-pointer transition-colors relative group ${activeSection === 'dials' ? 'text-teal-400 bg-zinc-900 border border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+              title="Taste Engine Dials"
+            >
+              <Sliders size={18} />
+              <span className="absolute left-16 top-1.5 bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] px-2 py-1 rounded hidden group-hover:block whitespace-nowrap z-50">Taste Engine Dials</span>
+            </button>
+
+            <button
+              onClick={() => setActiveSection('audit')}
+              className={`p-2 rounded-lg cursor-pointer transition-colors relative group ${activeSection === 'audit' ? 'text-teal-400 bg-zinc-900 border border-zinc-800' : 'text-zinc-500 hover:text-zinc-300'}`}
+              title="Anti-Slop Audit"
+            >
+              <ShieldCheck size={18} />
+              {warnCount > 0 && (
+                <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-amber-500 text-[8px] font-bold text-zinc-950 flex items-center justify-center rounded-full border border-zinc-950 font-mono animate-pulse">
+                  {warnCount}
+                </span>
+              )}
+              <span className="absolute left-16 top-1.5 bg-zinc-900 border border-zinc-800 text-zinc-200 text-[10px] px-2 py-1 rounded hidden group-hover:block whitespace-nowrap z-50">SAMI Slop Audit</span>
             </button>
           </div>
           
@@ -759,6 +868,139 @@ export const TokenEditor: React.FC<TokenEditorProps> = ({
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: DIALS */}
+          {activeSection === 'dials' && (
+            <div className="space-y-4">
+              <div>
+                <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 font-mono mb-1">Taste Engine Dials</h2>
+                <p className="text-xs text-zinc-500">Tune the active generative thresholds to dial in specific layout styles.</p>
+              </div>
+
+              <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800 space-y-5">
+                {/* Variance Dial */}
+                <div className="space-y-1.5">
+                  <div className="flex justify-between items-baseline">
+                    <label className="text-[10px] font-semibold text-zinc-400">Variance</label>
+                    <span className="text-xs font-mono font-bold text-teal-400">{tokens.dials?.variance ?? 8} / 10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={tokens.dials?.variance ?? 8}
+                    onChange={(e) => updateToken('dials.variance', parseInt(e.target.value))}
+                    className="w-full accent-teal-500 bg-zinc-950 rounded-lg appearance-none h-1.5 cursor-pointer"
+                  />
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    1-10 (1 = symmetric/predictable, 10 = artsy/asymmetric)
+                  </p>
+                </div>
+
+                {/* Motion Dial */}
+                <div className="space-y-1.5 pt-3 border-t border-zinc-950">
+                  <div className="flex justify-between items-baseline">
+                    <label className="text-[10px] font-semibold text-zinc-400">Motion</label>
+                    <span className="text-xs font-mono font-bold text-teal-400">{tokens.dials?.motion ?? 6} / 10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={tokens.dials?.motion ?? 6}
+                    onChange={(e) => updateToken('dials.motion', parseInt(e.target.value))}
+                    className="w-full accent-teal-500 bg-zinc-950 rounded-lg appearance-none h-1.5 cursor-pointer"
+                  />
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    1-10 (1 = static, 10 = cinematic/physics)
+                  </p>
+                </div>
+
+                {/* Density Dial */}
+                <div className="space-y-1.5 pt-3 border-t border-zinc-950">
+                  <div className="flex justify-between items-baseline">
+                    <label className="text-[10px] font-semibold text-zinc-400">Density</label>
+                    <span className="text-xs font-mono font-bold text-teal-400">{tokens.dials?.density ?? 4} / 10</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="1"
+                    max="10"
+                    step="1"
+                    value={tokens.dials?.density ?? 4}
+                    onChange={(e) => updateToken('dials.density', parseInt(e.target.value))}
+                    className="w-full accent-teal-500 bg-zinc-950 rounded-lg appearance-none h-1.5 cursor-pointer"
+                  />
+                  <p className="text-[10px] text-zinc-500 leading-normal">
+                    1-10 (1 = art-gallery airy, 10 = cockpit dense)
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* SECTION: ANTI-SLOP AUDIT */}
+          {activeSection === 'audit' && (
+            <div className="space-y-4 animate-fadeIn">
+              <div className="p-4 bg-zinc-900 rounded-lg border border-zinc-800 text-left">
+                <div className="flex items-center gap-2.5 mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                    <ShieldCheck size={16} weight="bold" />
+                  </div>
+                  <div>
+                    <h2 className="text-xs font-bold uppercase tracking-widest text-zinc-400 font-mono">Taste Audit Engine</h2>
+                    <p className="text-[10px] text-zinc-500 font-mono">COMPLIANCE STATUS // {7 - warnCount} / 7 PASSED</p>
+                  </div>
+                </div>
+
+                {/* Live progress indicator bar */}
+                <div className="w-full bg-zinc-950 h-1.5 rounded-full overflow-hidden mt-3">
+                  <div 
+                    className="h-full bg-teal-500 transition-all duration-500" 
+                    style={{ width: `${((7 - warnCount) / 7) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* Checklist items */}
+              <div className="space-y-2.5">
+                {auditItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    className="p-3.5 rounded-lg bg-zinc-900/60 border border-zinc-800 flex flex-col gap-2 text-left"
+                  >
+                    <div className="flex justify-between items-start gap-2.5">
+                      <div className="flex flex-col gap-0.5">
+                        <span className="text-[11px] font-bold text-zinc-200">{item.name}</span>
+                        <span className="text-[9px] text-zinc-500 font-mono">Current value: {item.value}</span>
+                      </div>
+                      
+                      {item.passed ? (
+                        <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[8px] font-extrabold uppercase tracking-wider border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Pass
+                        </span>
+                      ) : (
+                        <span className="shrink-0 inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[8px] font-extrabold uppercase tracking-wider border border-amber-500/20 animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Warn
+                        </span>
+                      )}
+                    </div>
+                    
+                    {!item.passed && (
+                      <div className="text-[10px] text-zinc-400 bg-zinc-950/60 p-2 rounded border border-zinc-800/40 leading-relaxed">
+                        <span className="text-amber-400 font-bold font-mono">FIX BRIEF // </span>
+                        {item.tip}
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             </div>
           )}

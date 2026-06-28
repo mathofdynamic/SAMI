@@ -34,7 +34,7 @@ export default function App() {
   };
 
   return (
-    <main className="w-full h-screen max-h-screen overflow-hidden flex flex-col bg-zinc-950 font-sans text-zinc-200">
+    <main className="w-full min-h-[100dvh] max-h-[100dvh] overflow-hidden flex flex-col bg-zinc-950 font-sans text-zinc-200">
       
       {/* Global Desktop Workspace Header */}
       <header className="h-14 bg-zinc-950 border-b border-zinc-900 flex items-center justify-between px-6 shrink-0 z-30 shadow-md">
@@ -83,7 +83,7 @@ export default function App() {
       </header>
 
       {/* Workspace split screens body */}
-      <div className="flex-1 flex flex-row overflow-hidden relative">
+      <div className="flex-1 flex flex-col md:flex-row overflow-hidden relative">
         
         {/* Workspace interactive Manifesto overlay */}
         {showGuide && (
@@ -101,7 +101,7 @@ export default function App() {
 
               <div className="space-y-4 text-xs md:text-sm text-zinc-300 leading-relaxed">
                 <p>
-                  Named after Sami — a brilliant designer — SAMI does for a developer what an experienced design engineer does for an agile product team: **it defines the visual grammar so everything built afterward remains uniform and beautiful.**
+                  Named after Sami - a brilliant designer - SAMI does for a developer what an experienced design engineer does for an agile product team: **it defines the visual grammar so everything built afterward remains uniform and beautiful.**
                 </p>
                 <p>
                   When individuals prompt an AI tool to "build me a website," the model typically invents generic, unsymmetrical, and highly inconsistent layouts. SAMI solves this by front-loading design specs into an unified source of truth:
@@ -125,8 +125,8 @@ export default function App() {
           </div>
         )}
 
-        {/* Left Side: Structured Visual Token Editor (Fixed 400px width) */}
-        <div className="w-[380px] sm:w-[410px] shrink-0 h-full relative z-20">
+        {/* Left/Top Side: Structured Visual Token Editor */}
+        <div className="w-full md:w-[380px] lg:w-[410px] shrink-0 h-[45vh] md:h-full relative z-20 border-b md:border-b-0 border-zinc-800">
           <TokenEditor
             tokens={tokens}
             setTokens={handleSetTokens}
@@ -138,8 +138,8 @@ export default function App() {
           />
         </div>
 
-        {/* Right Side: Pannable Canvas with Showcase Page grid view */}
-        <div className="flex-1 h-full relative z-10">
+        {/* Right/Bottom Side: Pannable Canvas with Showcase Page grid view */}
+        <div className="flex-1 h-[55vh] md:h-full relative z-10">
           <Canvas tokens={tokens} />
         </div>
       </div>

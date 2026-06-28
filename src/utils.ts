@@ -50,6 +50,53 @@ export function getWcagScore(ratio: number): { aa: boolean; aaa: boolean; text: 
   return { aa, aaa, text };
 }
 
+// Convert Hex to Saturation (HSL)
+export function getHexSaturation(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  
+  const d = max - min;
+  let s = 0;
+  
+  if (d > 0) {
+    const l = (max + min) / 2;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  }
+  
+  return Math.round(s * 100);
+}
+
+// Convert Hex to Hue (HSL)
+export function getHexHue(hex: string): number {
+  const rgb = hexToRgb(hex);
+  if (!rgb) return 0;
+  
+  const r = rgb.r / 255;
+  const g = rgb.g / 255;
+  const b = rgb.b / 255;
+  
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const d = max - min;
+  
+  if (d === 0) return 0;
+  
+  let h = 0;
+  switch (max) {
+    case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+    case g: h = (b - r) / d + 2; break;
+    case b: h = (r - g) / d + 4; break;
+  }
+  return Math.round(h * 60);
+}
+
 // Generate simple color tints/shades ramp
 export function generateColorRamp(hex: string): string[] {
   const rgb = hexToRgb(hex);
@@ -85,13 +132,53 @@ function rgbToHex(r: number, g: number, b: number): string {
 
 // Convert design tokens object into a CSS custom properties record for inline styles
 export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): Record<string, string | number> {
-  const colors: ColorTheme = tokens.colors[mode];
-  const { typography, shape, motion } = tokens;
+  if (!tokens) {
+    return {};
+  }
+  const colors: ColorTheme = tokens.colors?.[mode] || {
+    primary: '#18181b',
+    secondary: '#71717a',
+    accent: '#14b8a6',
+    neutralBg: '#fbfbfa',
+    neutralSurface: '#ffffff',
+    neutralBorder: '#e4e4e7',
+    textPrimary: '#09090b',
+    textSecondary: '#52525b',
+    success: '#10b981',
+    warning: '#f59e0b',
+    error: '#ef4444',
+    info: '#3b82f6',
+  };
+  const typography = tokens.typography || {
+    fontHeading: 'Outfit',
+    fontBody: 'Plus Jakarta Sans',
+    fontMono: 'JetBrains Mono',
+    sizeBase: 15,
+    weightHeading: '600',
+    weightBody: '400',
+    letterSpacingHeading: '-0.03em',
+    letterSpacingBody: '-0.01em',
+    lineHeightHeading: 1.1,
+    lineHeightBody: 1.6,
+  };
+  const shape = tokens.shape || {
+    radiusBase: 10,
+    borderWidth: 1,
+    shadowIntensity: 15,
+    backdropBlur: 8,
+  };
+  const motion = tokens.motion || {
+    durationFast: 120,
+    durationNormal: 250,
+    durationSlow: 500,
+    easing: 'cubic-bezier(0.16, 1, 0.3, 1)',
+  };
 
   // Compute radii relative steps (multipliers)
-  const radiusBase = shape.radiusBase;
-  const borderWidth = shape.borderWidth;
-  const shadowOpacity = shape.shadowIntensity / 100;
+  const radiusBase = shape.radiusBase !== undefined ? shape.radiusBase : 10;
+  const borderWidth = shape.borderWidth !== undefined ? shape.borderWidth : 1;
+  const shadowIntensity = shape.shadowIntensity !== undefined ? shape.shadowIntensity : 15;
+  const shadowOpacity = shadowIntensity / 100;
   
   // Custom shadow calculation based on intensity
   const ambientShadow = mode === 'light' 
@@ -99,31 +186,31 @@ export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): R
     : `0 2px 4px -1px rgba(0,0,0,0.5), 0 10px 25px -5px rgba(0,0,0,${shadowOpacity * 0.3}), 0 20px 40px -15px rgba(0,0,0,${shadowOpacity * 0.45})`;
 
   return {
-    '--color-primary': colors.primary,
-    '--color-secondary': colors.secondary,
-    '--color-accent': colors.accent,
-    '--color-bg': colors.neutralBg,
-    '--color-surface': colors.neutralSurface,
-    '--color-border': colors.neutralBorder,
-    '--text-primary': colors.textPrimary,
-    '--text-secondary': colors.textSecondary,
+    '--color-primary': colors.primary || '#18181b',
+    '--color-secondary': colors.secondary || '#71717a',
+    '--color-accent': colors.accent || '#14b8a6',
+    '--color-bg': colors.neutralBg || '#fbfbfa',
+    '--color-surface': colors.neutralSurface || '#ffffff',
+    '--color-border': colors.neutralBorder || '#e4e4e7',
+    '--text-primary': colors.textPrimary || '#09090b',
+    '--text-secondary': colors.textSecondary || '#52525b',
     
-    '--color-success': colors.success,
-    '--color-warning': colors.warning,
-    '--color-error': colors.error,
-    '--color-info': colors.info,
+    '--color-success': colors.success || '#10b981',
+    '--color-warning': colors.warning || '#f59e0b',
+    '--color-error': colors.error || '#ef4444',
+    '--color-info': colors.info || '#3b82f6',
 
-    '--font-heading': `"${typography.fontHeading}", system-ui, sans-serif`,
-    '--font-body': `"${typography.fontBody}", system-ui, sans-serif`,
-    '--font-mono': `"${typography.fontMono}", monospace`,
+    '--font-heading': `"${typography.fontHeading || 'Outfit'}", system-ui, sans-serif`,
+    '--font-body': `"${typography.fontBody || 'Plus Jakarta Sans'}", system-ui, sans-serif`,
+    '--font-mono': `"${typography.fontMono || 'JetBrains Mono'}", monospace`,
     
-    '--font-size-base': `${typography.sizeBase}px`,
-    '--font-weight-heading': typography.weightHeading,
-    '--font-weight-body': typography.weightBody,
-    '--letter-spacing-heading': typography.letterSpacingHeading,
-    '--letter-spacing-body': typography.letterSpacingBody,
-    '--line-height-heading': `${typography.lineHeightHeading}`,
-    '--line-height-body': `${typography.lineHeightBody}`,
+    '--font-size-base': `${typography.sizeBase || 15}px`,
+    '--font-weight-heading': typography.weightHeading || '600',
+    '--font-weight-body': typography.weightBody || '400',
+    '--letter-spacing-heading': typography.letterSpacingHeading || '-0.03em',
+    '--letter-spacing-body': typography.letterSpacingBody || '-0.01em',
+    '--line-height-heading': `${typography.lineHeightHeading || 1.1}`,
+    '--line-height-body': `${typography.lineHeightBody || 1.6}`,
 
     '--radius-xs': `${Math.max(0, radiusBase * 0.25)}px`,
     '--radius-sm': `${Math.max(0, radiusBase * 0.5)}px`,
@@ -133,12 +220,12 @@ export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): R
     
     '--border-width': `${borderWidth}px`,
     '--shadow-ambient': ambientShadow,
-    '--backdrop-blur': `${shape.backdropBlur}px`,
+    '--backdrop-blur': `${shape.backdropBlur !== undefined ? shape.backdropBlur : 8}px`,
     
-    '--motion-fast': `${motion.durationFast}ms`,
-    '--motion-normal': `${motion.durationNormal}ms`,
-    '--motion-slow': `${motion.durationSlow}ms`,
-    '--motion-easing': motion.easing,
+    '--motion-fast': `${motion.durationFast || 120}ms`,
+    '--motion-normal': `${motion.durationNormal || 250}ms`,
+    '--motion-slow': `${motion.durationSlow || 500}ms`,
+    '--motion-easing': motion.easing || 'cubic-bezier(0.16, 1, 0.3, 1)',
   } as Record<string, string | number>;
 }
 
@@ -149,127 +236,144 @@ export function generateDesignMd(tokens: DesignTokens): string {
   const lightContrast = getContrastRatio(colors.light.textPrimary, colors.light.neutralBg).toFixed(2);
   const darkContrast = getContrastRatio(colors.dark.textPrimary, colors.dark.neutralBg).toFixed(2);
 
-  return `# ${tokens.appName} — Design Language Spec
+  const varianceVal = tokens.dials?.variance ?? 8;
+  const motionVal = tokens.dials?.motion ?? 6;
+  const densityVal = tokens.dials?.density ?? 4;
+
+  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${varianceVal === 1 ? "completely symmetric/predictable" : varianceVal <= 4 ? "mostly symmetric/predictable" : varianceVal <= 7 ? "partially artsy/asymmetric" : "highly artsy/asymmetric"} visual composition)`;
+  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${motionVal === 1 ? "completely static" : motionVal <= 4 ? "minimal visual motion" : motionVal <= 7 ? "cinematic transitions" : "highly cinematic/physics-driven"} active animations)`;
+  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${densityVal === 1 ? "extremely airy/art-gallery" : densityVal <= 4 ? "airy/minimal layout spacing" : densityVal <= 7 ? "dense/compact layout spacing" : "highly dense cockpit-style"} page visually)`;
+
+  const evocativeParagraph = `This design system establishes a ${colors.light.neutralBg.toLowerCase() === '#f4f4f0' || colors.dark.neutralBg.toLowerCase() === '#0a0a0a' ? 'striking industrial/brutalist' : 'highly polished agency-tier'} atmosphere for **${tokens.appName}**. Driven by a design variance of ${varianceVal}/10, it rejects boring symmetric templates in favor of rich layout rhythm, asymmetric grids, and tactile micro-interactions. The typography layers the geometric tracking of \`${typography.fontHeading}\` over the highly legible \`${typography.fontBody}\`, framed by precise \`${components.buttonStyle}\` interaction targets and \`${components.cardStyle}\` elevation cells. It moves with a cinematic tempo of ${motionVal}/10, balancing responsive spring physics against a structured layout density of ${densityVal}/10 to maintain spacious, breathtaking negative space or dense functional cockpit utility as needed.`;
+
+  return `# ${tokens.appName} - Design Language Spec
 
 > Generated with SAMI Visual Design System Studio. This document serves as the absolute single source of truth for the visual style of **${tokens.appName}**. Use this to prime and guide downstream agentic coding tools (e.g. Claude Code, Cursor, v0).
 
 ---
 
-## 1. Design Principles & Meta
+## 1. Configuration & Dials
 - **Brand / App Name:** ${tokens.appName}
-- **Typography Concept:** Heading: \`${typography.fontHeading}\` (Weight: \`${typography.weightHeading}\`), Body: \`${typography.fontBody}\`
-- **Button Archetype:** \`${components.buttonStyle}\` style inputs
-- **Card/Container Archetype:** \`${components.cardStyle}\` styling
+- **DESIGN_VARIANCE:** ${varianceVal}/10
+  - *Setting interpretation:* ${varianceExp}
+- **MOTION_INTENSITY:** ${motionVal}/10
+  - *Setting interpretation:* ${motionExp}
+- **VISUAL_DENSITY:** ${densityVal}/10
+  - *Setting interpretation:* ${densityExp}
 
 ---
 
-## 2. Color System
+## 2. Visual Theme & Atmosphere
+${evocativeParagraph}
 
-### 2.1 Core Palette Mapping
-| Token Name | Light Value | Dark Value | Core Application / Usage Guidelines |
+---
+
+## 3. Color Palette & Roles
+
+### 3.1 Color Roles Mapping
+| Color Role | Light Value | Dark Value | Functional Application & Guidelines |
 | :--- | :--- | :--- | :--- |
-| **Primary** | \`${colors.light.primary}\` | \`${colors.dark.primary}\` | Main Brand Color, high-emphasis text, primary solid layouts. |
-| **Secondary** | \`${colors.light.secondary}\` | \`${colors.dark.secondary}\` | Medium-emphasis text, description elements, secondary buttons. |
-| **Accent** | \`${colors.light.accent}\` | \`${colors.dark.accent}\` | Focal interaction indicators, CTAs, highlight pills, active tracks. |
-| **Neutral Bg** | \`${colors.light.neutralBg}\` | \`${colors.dark.neutralBg}\` | Core substrate page background. Light modes use bone/soft papers. |
-| **Neutral Surface** | \`${colors.light.neutralSurface}\` | \`${colors.dark.neutralSurface}\` | Floating containers, cards, dialog drawers, panel surfaces. |
-| **Neutral Border** | \`${colors.light.neutralBorder}\` | \`${colors.dark.neutralBorder}\` | Structured hairline separators, input frames, subtle card outlines. |
-| **Text Primary** | \`${colors.light.textPrimary}\` | \`${colors.dark.textPrimary}\` | Body-text, headings, titles, labels. Contrast locked. |
-| **Text Secondary** | \`${colors.light.textSecondary}\` | \`${colors.dark.textSecondary}\` | Auxiliary captions, meta tags, timestamps, instructions. |
+| **Primary** | ${"`"}\${colors.light.primary}${"`"} | ${"`"}\${colors.dark.primary}${"`"} | Main brand canvas anchor, high-emphasis typography elements, heavy banners. |
+| **Secondary** | ${"`"}\${colors.light.secondary}${"`"} | ${"`"}\${colors.dark.secondary}${"`"} | Medium-emphasis textual annotations, descriptions, secondary actionable bounds. |
+| **Accent** | ${"`"}\${colors.light.accent}${"`"} | ${"`"}\${colors.dark.accent}${"`"} | Focal interaction points, key CTAs, highlights, active selections. |
+| **Neutral Bg** | ${"`"}\${colors.light.neutralBg}${"`"} | ${"`"}\${colors.dark.neutralBg}${"`"} | General canvas base substrate. Avoid pure ${"`"}#ffffff${"`"} or pure ${"`"}#000000${"`"}. |
+| **Neutral Surface** | ${"`"}\${colors.light.neutralSurface}${"`"} | ${"`"}\${colors.dark.neutralSurface}${"`"} | Raised layout cards, dialog containers, bento cell boards. |
+| **Neutral Border** | ${"`"}\${colors.light.neutralBorder}${"`"} | ${"`"}\${colors.dark.neutralBorder}${"`"} | Thin hairline divisions, border frames, subtle cell bounding strokes. |
+| **Text Primary** | ${"`"}\${colors.light.textPrimary}${"`"} | ${"`"}\${colors.dark.textPrimary}${"`"} | Dominant text hierarchy, display lines, labels. |
+| **Text Secondary** | ${"`"}\${colors.light.textSecondary}${"`"} | ${"`"}\${colors.dark.textSecondary}${"`"} | Low-priority metadata, captions, timestamp text. |
 
-### 2.2 Semantic Status System
-| Semantic Token | Light Mode Value | Dark Mode Value | Operational Context |
+### 3.2 Semantic Palette
+| Semantic Role | Light Value | Dark Value | Core Contextual Application |
 | :--- | :--- | :--- | :--- |
-| **Success** | \`${colors.light.success}\` | \`${colors.dark.success}\` | Success states, checked items, positive trends, completed flows. |
-| **Warning** | \`${colors.light.warning}\` | \`${colors.dark.warning}\` | Warnings, low-priority issues, system sync status, alert warnings. |
-| **Error** | \`${colors.light.error}\` | \`${colors.dark.error}\` | Error notices, invalid form fields, destructive actions, deleted objects. |
-| **Info** | \`${colors.light.info}\` | \`${colors.dark.info}\` | Tips, systemic logs, contextual callouts, help info bubbles. |
+| **Success** | ${"`"}\${colors.light.success}${"`"} | ${"`"}\${colors.dark.success}${"`"} | Validations, positive indicators, completions, successful updates. |
+| **Warning** | ${"`"}\${colors.light.warning}${"`"} | ${"`"}\${colors.dark.warning}${"`"} | Safe warnings, pending steps, non-blocking sync indicators. |
+| **Error** | ${"`"}\${colors.light.error}${"`"} | ${"`"}\${colors.dark.error}${"`"} | Invalid values, blocking errors, deletion warnings. |
+| **Info** | ${"`"}\${colors.light.info}${"`"} | ${"`"}\${colors.dark.info}${"`"} | Auxiliary help, helper tooltips, system notices. |
 
-*Contrast Ratio Checklist:*
-- **Light Mode Text-to-Bg Contrast:** \`${lightContrast}:1\` (WCAG ${getWcagScore(parseFloat(lightContrast)).text})
-- **Dark Mode Text-to-Bg Contrast:** \`${darkContrast}:1\` (WCAG ${getWcagScore(parseFloat(darkContrast)).text})
+### 3.3 WCAG AA Contrast Checks
+- **Light Mode Text Contrast:** ${"`"}${lightContrast}:1${"`"} (WCAG ${getWcagScore(parseFloat(lightContrast)).text})
+- **Dark Mode Text Contrast:** ${"`"}${darkContrast}:1${"`"} (WCAG ${getWcagScore(parseFloat(darkContrast)).text})
 
----
-
-## 3. Typography & Typescale
-
-### 3.1 Families
-- **Display & Headings:** \`${typography.fontHeading}\` (sans-serif display)
-- **Body & Controls:** \`${typography.fontBody}\` (system-safe body)
-- **Monospace Telemetry:** \`${typography.fontMono}\` (data grids, metrics, numbers)
-
-### 3.2 Scales & Metrics
-- **Base Size:** \`${typography.sizeBase}px\` (corresponds to \`1rem\`)
-- **Modular Scale Factor:** \`${typography.scaleRatio}\`
-- **Heading Line Height:** \`${typography.lineHeightHeading}\` | **Body Line Height:** \`${typography.lineHeightBody}\`
-- **Heading Letter Spacing:** \`${typography.letterSpacingHeading}\` | **Body Letter Spacing:** \`${typography.letterSpacingBody}\`
+### 3.4 Banned Colors
+- **No pure #000000 black.** Use soft charcoal values (e.g. ${"`"}#050505${"`"} or ${"`"}#0a0a0a${"`"}).
+- **No pure #ffffff white.** Use elegant soft bone or warm paper whites (e.g. ${"`"}#fafafa${"`"} or ${"`"}#fbfbfa${"`"}).
+- **No "AI Lila" palette.** Reject neon purple/blue gradient glows. Keep saturation < 80%.
 
 ---
 
-## 4. Spacing & Spatial Structure
-- **Base Unit:** \`4px\` / \`0.25rem\` (\`1 grid unit\`)
-- **Scale Steps:**
-  - XS (2xs): \`4px\` (\`0.25rem\`)
-  - Small (sm): \`8px\` (\`0.5rem\`)
-  - Medium (md): \`16px\` (\`1rem\`)
-  - Large (lg): \`24px\` (\`1.5rem\`)
-  - XL (xl): \`32px\` (\`2rem\`)
-  - 2XL (2xl): \`48px\` (\`3rem\`)
-  - 3XL (3xl): \`64px\` (\`4rem\`)
+## 4. Typography Rules
+
+### 4.1 Family Stack Assignments
+- **Display & Heading Font:** ${"`"}${typography.fontHeading}${"`"} (geometric display font)
+- **General Body Font:** ${"`"}${typography.fontBody}${"`"} (system-safe body legibility font)
+- **Data & Monospace Font:** ${"`"}${typography.fontMono}${"`"} (numbers, metrics, code widgets)
+
+### 4.2 Typographic Metrics & Scale
+- **Base Font Size:** ${"`"}${typography.sizeBase}px${"`"} (maps to root ${"`"}1rem${"`"})
+- **Scale Factor Ratio:** ${"`"}${typography.scaleRatio}${"`"}
+- **Line Heights:** Headings: ${"`"}${typography.lineHeightHeading}${"`"} | Body: ${"`"}${typography.lineHeightBody}${"`"}
+- **Letter Spacing:** Headings: ${"`"}${typography.letterSpacingHeading}${"`"} | Body: ${"`"}${typography.letterSpacingBody}${"`"}
+- **Font Weights:** Headings: ${"`"}${typography.weightHeading}${"`"} | Body: ${"`"}${typography.weightBody}${"`"}
+
+### 4.3 Banned Fonts
+- **Never use Inter, Roboto, Arial, Open Sans, or Helvetica as display fonts.**
 
 ---
 
-## 5. Shape & Elevation
+## 5. Component Stylings
 
-### 5.1 Corner Radii Scale
-- **Radius Base (Medium):** \`${shape.radiusBase}px\`
-- **Concentric Scale:**
-  - Extra-Small (xs): \`${(shape.radiusBase * 0.25).toFixed(0)}px\`
-  - Small (sm): \`${(shape.radiusBase * 0.5).toFixed(0)}px\`
-  - Medium (md): \`${shape.radiusBase}px\`
-  - Large (lg): \`${(shape.radiusBase * 1.5).toFixed(0)}px\`
-  - Extra-Large (xl): \`${(shape.radiusBase * 2.5).toFixed(0)}px\`
+### 5.1 Interactive Buttons
+- **Active System Style:** ${"`"}${components.buttonStyle}${"`"}
+- **Interaction Hover Specs:** Interpolates smoothly to 95% scaling or slight translation offsets over ${"`"}${motion.durationFast}ms${"`"} with curve ${"`"}${motion.easing}${"`"}.
+- **States Checklist:** Fully implement and style states for: ${"`"}Default${"`"}, ${"`"}Hover${"`"}, ${"`"}Active${"`"}, ${"`"}Focus${"`"}, ${"`"}Disabled${"`"}.
 
-### 5.2 Outlines & Boundaries
-- **Hairline Border Width:** \`${shape.borderWidth}px\`
-- **Backdrop Glass Blur:** \`${shape.backdropBlur}px\`
+### 5.2 Layout Cards & Dividers
+- **Card Blueprint Style:** ${"`"}${components.cardStyle}${"`"}
+- **Dividers:** Strictly Hairline (${"`"}${shape.borderWidth}px${"`"}) borders using ${"`"}neutralBorder${"`"} token.
 
-### 5.3 Shadows & Elevation
-- **Ambient Shadow Intensity:** \`${shape.shadowIntensity}%\`
-- **Shadow Hue Reference:** \`${shape.shadowColor}\`
+### 5.3 Inputs
+- Form labels must reside **ABOVE** the input. Always provide detailed active focus rings using the accent token.
 
----
+### 5.4 Navbars
+- Use detached, floating glass pills with backdrop blur. Avoid top-glued edge-to-edge navbar blocks.
 
-## 6. Component Archetypes & Guidelines
-
-### 6.1 Interactive Buttons
-- **Active System Style:** \`${components.buttonStyle}\`
-- **Interaction Hover Specs:** Interpolates to 95% scaling or 3D translations over \`${motion.durationFast}ms\` with easing \`${motion.easing}\`.
-- **States Checklist:** Fully implement and style states for: \`Default\`, \`Hover\`, \`Active\`, \`Focus\`, \`Disabled\`.
-
-### 6.2 Layout Cards & Dividers
-- **Card Blueprint Style:** \`${components.cardStyle}\`
-- **Dividers:** Strictly Hairline (\`${shape.borderWidth}px\`) borders colored with \`neutralBorder\`.
+### 5.5 Loaders & State Cells
+- Provide custom layout skeletons for loading, empty, and error feedback states.
 
 ---
 
-## 7. Motion Choreography
-- **Interaction Feedback (Fast):** \`${motion.durationFast}ms\`
-- **Structural Transition (Normal):** \`${motion.durationNormal}ms\`
-- **Cinematic Entry (Slow):** \`${motion.durationSlow}ms\`
-- **Global Easing Curve:** \`${motion.easing}\`
+## 6. Layout Principles
+- **Grid-First Core Layouts:** Construct flexible layouts using CSS Grid. Use ${"`"}grid-flow-dense${"`"} to avoid voids.
+- **Asymmetric Structure:** Prefer asymmetric bento grids or staggered zig-zag layouts.
+- **Anti-Pattern Constraint:** No "3 equal cards in a row" feature section.
+- **Maximum Container Width:** Clamp main panels to ${"`"}max-w-[1400px] mx-auto${"`"}.
 
 ---
 
-## 8. Instructions for the AI Coding Agent
+## 7. Responsive Rules
+- **Mobile-First Collapse:** Force all grids/columns to collapse to a single column (${"`"}grid-cols-1${"`"}, ${"`"}px-4${"`"}, ${"`"}gap-6${"`"}) below ${"`"}768px${"`"}.
+- **Haptic Touch Targets:** All mobile action buttons must conform to a minimum size of ${"`"}44px${"`"} to guarantee touch accuracy.
+- **Test Resolutions:** Implement layouts that test beautifully at ${"`"}375px${"`"} (mobile), ${"`"}768px${"`"} (tablet), and ${"`"}1440px${"`"} (desktop).
 
-This visual design language is non-negotiable. Follow these strict engineering mandates when building:
+---
 
-1. **Tokens-First CSS Variables:** Define the variables listed under \`theme.css\` at the root of the applet. Every single component must consume these custom properties. **Never** use hardcoded hexadecimal colors or absolute pixel sizing for layouts.
-2. **Typography Pairing:** Ensure the display font \`${typography.fontHeading}\` is imported in \`index.css\` from Google Fonts and assigned to \`h1, h2, h3, h4\`. Bind body text to \`${typography.fontBody}\`. Monospace blocks must strictly use \`${typography.fontMono}\`.
-3. **Double-Bezel Card Pattern:** (If \`${components.cardStyle} === 'double-bezel'\`) Wrap elevated cards in a secondary bounding container with slight background tint \`bg-black/5\` and padding \`p-1.5\` to create physical double-layered bevel hardware.
-4. **Interactive Tactility:** Implement hover and active transformations using spring physics or the easing curve \`cubic-bezier(0.16, 1, 0.3, 1)\`. On \`:active\`, reduce scale slightly (\`scale-95\` or \`scale-98\`) to mimic physical compression.
-5. **Layout Responsiveness:** Build layouts using mobile-first collapsible columns (\`grid-cols-1 md:grid-cols-2 lg:grid-cols-3\`). Section margins should remain spacious (\`py-24\` or \`py-32\`) to respect negative space.
+## 8. Motion & Interaction
+- **Physics Defaults:** Avoid linear paths; configure transitions using cubic-beziers.
+- **GPU-Accelerated Tweens:** Only animate ${"`"}transform${"`"} and ${"`"}opacity${"`"} to preserve 60fps on mobile displays.
+- **User Preference Honor:** Automatically disable heavy visual motion when ${"`"}prefers-reduced-motion${"`"} is detected.
+
+---
+
+## 9. Anti-Patterns (Anti-Slop Rules)
+- **No Em-Dashes or En-Dashes:** ZERO em-dashes (—) or en-dashes (–) anywhere. Use standard hyphens "-".
+- **Hero Constraints:** Keep H1 <= 2 lines, subtext <= 20 words, max top padding ${"`"}pt-24${"`"}. Avoid scroll cues or beta labels.
+- **No Emojis:** Build clean, professional icons; do not inject casual emojis.
+- **No John Doe or Acme Corp:** Populate copy with realistic, professional names and specific data.
+
+---
+
+## 10. Instructions for the AI Coding Agent
+These tokens are the single source of truth. Implement them as CSS variables / Tailwind config, never hard-code values, and the rules above are hard requirements.
 
 *Begin coding by importing Google Fonts:*
 \`\`\`css
@@ -377,7 +481,7 @@ export function generateThemeCss(tokens: DesignTokens): string {
   --shadow-ambient: ${shadow};`;
   };
 
-  return `/* SAMI Theme Style Sheet — runtime-injectable CSS custom properties */
+  return `/* SAMI Theme Style Sheet - runtime-injectable CSS custom properties */
 
 @import url('https://fonts.googleapis.com/css2?family=${typography.fontHeading.replace(/ /g, '+')}:wght@400;500;600;700;800&family=${typography.fontBody.replace(/ /g, '+')}:wght@300;400;500;600&family=${typography.fontMono.replace(/ /g, '+')}:wght@400;500&display=swap');
 
@@ -428,6 +532,14 @@ ${varsForMode('dark')}
 
 // Generate highly detailed prompt for Claude Code / Cursor / coding agents
 export function generateAgentPrompt(tokens: DesignTokens): string {
+  const varianceVal = tokens.dials?.variance ?? 8;
+  const motionVal = tokens.dials?.motion ?? 6;
+  const densityVal = tokens.dials?.density ?? 4;
+
+  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${varianceVal === 1 ? "completely symmetric/predictable" : varianceVal <= 4 ? "mostly symmetric/predictable" : varianceVal <= 7 ? "partially artsy/asymmetric" : "highly artsy/asymmetric"} visual composition)`;
+  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${motionVal === 1 ? "completely static" : motionVal <= 4 ? "minimal visual motion" : motionVal <= 7 ? "cinematic transitions" : "highly cinematic/physics-driven"} active animations)`;
+  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${densityVal === 1 ? "extremely airy/art-gallery" : densityVal <= 4 ? "airy/minimal layout spacing" : densityVal <= 7 ? "dense/compact layout spacing" : "highly dense cockpit-style"} page visually)`;
+
   return `You are tasked with building a web application named "${tokens.appName}".
 Please follow the strict visual design tokens specified below as your single source of truth.
 
@@ -453,6 +565,38 @@ Please follow the strict visual design tokens specified below as your single sou
 - Neutral Background: ${tokens.colors.dark.neutralBg}
 - Neutral Card Surface: ${tokens.colors.dark.neutralSurface}
 - Neutral Separators: ${tokens.colors.dark.neutralBorder}
+
+## Design Dials
+DESIGN_VARIANCE: ${varianceVal}  MOTION_INTENSITY: ${motionVal}  VISUAL_DENSITY: ${densityVal}
+- ${varianceExp}
+- ${motionExp}
+- ${densityExp}
+
+## Anti-Slop Rules (non-negotiable, enforce on every page)
+- ZERO em-dashes (—) and en-dashes (–) anywhere: headlines, body, captions,
+  buttons, alt text. Use a normal hyphen "-". This is the #1 AI tell.
+- Never use Inter, Roboto, Arial, Open Sans, or Helvetica as the display font.
+- No "AI purple/violet" gradient glows. One accent color, saturation < 80%,
+  used identically across the whole page. Neutral base (zinc/slate/stone).
+- No pure #000000 or pure #ffffff. Use off-black and off-white.
+- No "3 equal feature cards in a row." Use zig-zag, asymmetric bento, or
+  horizontal scroll. Max 2 consecutive image+text-split sections.
+- Hero fits in one viewport: headline <= 2 lines, subtext <= 20 words,
+  CTA visible without scrolling, max top padding pt-24. Max 4 text elements
+  in the hero. One primary CTA (+ at most one secondary).
+- Eyebrows (small uppercase tracking labels above headers) rationed to at most
+  1 per 3 sections. No section-number eyebrows ("01 / INDEX", "002 · Features").
+- No scroll cues ("Scroll", down arrows), no version labels in hero (V0.6, BETA),
+  no decorative status dots, no locale/time/weather strips, no fake div-based
+  product screenshots, no em-dash separators.
+- One corner-radius system, one accent, one theme (light OR dark) per page.
+- Every button: text contrast WCAG AA (4.5:1), label fits one line, no duplicate
+  CTA intent ("Get in touch" + "Let's talk" on the same page = fail).
+- Real images only (or labeled placeholder slots). No hand-rolled SVG icons;
+  use Phosphor/HugeIcons/Radix/Tabler. No emojis.
+- Animate only transform/opacity; honor prefers-reduced-motion for any motion > 3.
+- No generic content: no "John Doe", "Acme", "Lorem", "Elevate/Seamless/Unleash",
+  no fake-round numbers (99.99%, 50%). Use realistic, specific content.
 
 4. SPECIAL INSTRUCTIONS:
 - Implement these tokens as runtime CSS Variables inside ":root" and "[data-theme='dark']".

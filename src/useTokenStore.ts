@@ -12,9 +12,27 @@ export function useTokenStore() {
     try {
       const saved = localStorage.getItem(STORAGE_KEY);
       if (saved) {
+        const parsed = JSON.parse(saved);
+        
+        // Deeply merge and fallback to ensure no undefined property crashes
+        const merged: DesignTokens = {
+          ...defaultTokens,
+          ...parsed,
+          colors: {
+            light: { ...defaultTokens.colors.light, ...parsed.colors?.light },
+            dark: { ...defaultTokens.colors.dark, ...parsed.colors?.dark },
+          },
+          typography: { ...defaultTokens.typography, ...parsed.typography },
+          shape: { ...defaultTokens.shape, ...parsed.shape },
+          motion: { ...defaultTokens.motion, ...parsed.motion },
+          components: { ...defaultTokens.components, ...parsed.components },
+          dials: { ...defaultTokens.dials, ...parsed.dials || { variance: 8, motion: 6, density: 4 } },
+          appName: parsed.appName || defaultTokens.appName || 'Aether',
+        };
+
         return {
           past: [],
-          present: JSON.parse(saved),
+          present: merged,
           future: [],
         };
       }

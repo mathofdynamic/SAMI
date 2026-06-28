@@ -3,7 +3,7 @@ import React from 'react';
 // Primitive Props
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   buttonStyle?: 'flat' | 'double-bezel' | 'pill' | 'tactile';
 }
 
@@ -20,9 +20,10 @@ export const Button: React.FC<ButtonProps> = ({
   
   // Font Family: Heading for buttons
   baseClass += ' font-[family-name:var(--font-heading)]';
-
+ 
   // Sizing
   const sizeClasses = {
+    xs: 'px-2.5 py-1 text-[10px]',
     sm: 'px-3.5 py-1.5 text-xs',
     md: 'px-5 py-2.5 text-sm',
     lg: 'px-7 py-3.5 text-base',
@@ -252,12 +253,13 @@ export const Switch: React.FC<SwitchProps> = ({ checked, onChange, label }) => {
 interface AvatarProps {
   src?: string;
   name: string;
-  size?: 'sm' | 'md' | 'lg';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   online?: boolean;
 }
 
 export const Avatar: React.FC<AvatarProps> = ({ src, name, size = 'md', online = false }) => {
   const sizeClasses = {
+    xs: 'w-6 h-6 text-[9px]',
     sm: 'w-8 h-8 text-xs',
     md: 'w-10 h-10 text-sm',
     lg: 'w-14 h-14 text-lg',

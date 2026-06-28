@@ -55,6 +55,12 @@ export interface DesignTokens {
     cardStyle: 'flat' | 'bordered' | 'elevated' | 'double-bezel';
     inputStyle: 'underlined' | 'filled' | 'bordered';
   };
+  // Dials
+  dials: {
+    variance: number;   // 1-10  (1 = symmetric/predictable, 10 = artsy/asymmetric)
+    motion: number;     // 1-10  (1 = static, 10 = cinematic/physics)
+    density: number;    // 1-10  (1 = art-gallery airy, 10 = cockpit dense)
+  };
 }
 
 export interface ThemePreset {

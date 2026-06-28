@@ -4,7 +4,10 @@ import {
   generateDesignMd, 
   generateTokensJson, 
   generateThemeCss, 
-  generateAgentPrompt 
+  generateAgentPrompt,
+  getContrastRatio,
+  getHexSaturation,
+  getHexHue
 } from '../utils';
 import { 
   X, 
@@ -14,7 +17,8 @@ import {
   FileCode, 
   FileHtml, 
   FileText, 
-  ClipboardText 
+  ClipboardText,
+  ShieldCheck
 } from '@phosphor-icons/react';
 
 interface ExportDrawerProps {
@@ -24,10 +28,95 @@ interface ExportDrawerProps {
 }
 
 export const ExportDrawer: React.FC<ExportDrawerProps> = ({ isOpen, onClose, tokens }) => {
-  const [activeTab, setActiveTab] = useState<'design_md' | 'tokens_json' | 'theme_css' | 'agent_prompt'>('design_md');
+  const [activeTab, setActiveTab] = useState<'design_md' | 'tokens_json' | 'theme_css' | 'agent_prompt' | 'slop_audit'>('design_md');
   const [copied, setCopied] = useState(false);
 
   if (!isOpen) return null;
+
+  // Slop Audit live calculations
+  const satLight = getHexSaturation(tokens.colors.light.accent);
+  const satDark = getHexSaturation(tokens.colors.dark.accent);
+  const accentSatPassed = satLight < 80 && satDark < 80;
+
+  const headingFontLower = tokens.typography.fontHeading.toLowerCase();
+  const bannedFonts = ['inter', 'roboto', 'arial', 'open sans', 'helvetica'];
+  const headingFontPassed = !bannedFonts.some(f => headingFontLower.includes(f));
+
+  const lightBgPure = tokens.colors.light.neutralBg.toLowerCase() === '#ffffff';
+  const lightTextPure = tokens.colors.light.textPrimary.toLowerCase() === '#000000';
+  const darkBgPure = tokens.colors.dark.neutralBg.toLowerCase() === '#000000';
+  const darkTextPure = tokens.colors.dark.textPrimary.toLowerCase() === '#ffffff';
+  const pureColorPassed = !lightBgPure && !lightTextPure && !darkBgPure && !darkTextPure;
+
+  const lightContrast = getContrastRatio(tokens.colors.light.textPrimary, tokens.colors.light.neutralBg);
+  const lightTextContrastPassed = lightContrast >= 4.5;
+
+  const darkContrast = getContrastRatio(tokens.colors.dark.textPrimary, tokens.colors.dark.neutralBg);
+  const darkTextContrastPassed = darkContrast >= 4.5;
+
+  const buttonContrastLight = getContrastRatio(tokens.colors.light.accent, tokens.colors.light.neutralBg);
+  const buttonContrastDark = getContrastRatio(tokens.colors.dark.accent, tokens.colors.dark.neutralBg);
+  const buttonContrastPassed = buttonContrastLight >= 4.5 && buttonContrastDark >= 4.5;
+
+  const hueLight = getHexHue(tokens.colors.light.accent);
+  const hueDark = getHexHue(tokens.colors.dark.accent);
+  const hueDiff = Math.abs(hueLight - hueDark);
+  const hueDiffNormalized = hueDiff > 180 ? 360 - hueDiff : hueDiff;
+  const singleAccentPassed = hueDiffNormalized <= 30;
+
+  const auditItems = [
+    {
+      id: 'accent-saturation',
+      name: 'Accent saturation < 80%',
+      passed: accentSatPassed,
+      value: `Light: ${satLight}%, Dark: ${satDark}%`,
+      tip: 'Reduce accent saturation below 80% to blend beautifully with neutrals.',
+    },
+    {
+      id: 'heading-font',
+      name: 'Premium Heading Font',
+      passed: headingFontPassed,
+      value: tokens.typography.fontHeading,
+      tip: 'Avoid generic fonts like Inter, Roboto, Arial, Open Sans, or Helvetica.',
+    },
+    {
+      id: 'pure-colors',
+      name: 'No pure #000000 or #ffffff',
+      passed: pureColorPassed,
+      value: `Bg: ${tokens.colors.light.neutralBg}/${tokens.colors.dark.neutralBg}`,
+      tip: 'Avoid pure black/white; use soft off-whites and rich charcoals.',
+    },
+    {
+      id: 'light-text-contrast',
+      name: 'Light Text Contrast >= 4.5:1',
+      passed: lightTextContrastPassed,
+      value: `${lightContrast.toFixed(2)}:1`,
+      tip: 'Increase contrast between text and light background for WCAG AA compliance.',
+    },
+    {
+      id: 'dark-text-contrast',
+      name: 'Dark Text Contrast >= 4.5:1',
+      passed: darkTextContrastPassed,
+      value: `${darkContrast.toFixed(2)}:1`,
+      tip: 'Increase contrast between text and dark background for WCAG AA compliance.',
+    },
+    {
+      id: 'button-contrast',
+      name: 'Button Text vs Fill Contrast >= 4.5:1',
+      passed: buttonContrastPassed,
+      value: `Light: ${buttonContrastLight.toFixed(2)}:1, Dark: ${buttonContrastDark.toFixed(2)}:1`,
+      tip: 'Ensure the accent button fill and label have high contrast ratio.',
+    },
+    {
+      id: 'single-accent',
+      name: 'Unified Brand Accent Hue',
+      passed: singleAccentPassed,
+      value: `Hue Diff: ${hueDiffNormalized.toFixed(0)}°`,
+      tip: 'Light and Dark accents should share a single cohesive brand hue (diff <= 30°).',
+    }
+  ];
+
+  const warnCount = auditItems.filter(item => !item.passed).length;
 
   // Generate contents
   const designMd = generateDesignMd(tokens);
@@ -40,6 +129,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({ isOpen, onClose, tok
       case 'tokens_json': return tokensJson;
       case 'theme_css': return themeCss;
       case 'agent_prompt': return agentPrompt;
+      case 'slop_audit': return `SAMI SLOP AUDIT REPORT // ${7 - warnCount} / 7 PASSED\n\n` + auditItems.map(item => `${item.passed ? '[PASS]' : '[WARN]'} ${item.name} (${item.value})\n${!item.passed ? `Fix Brief: ${item.tip}\n` : ''}`).join('\n');
       default: return designMd;
     }
   };
@@ -50,6 +140,7 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({ isOpen, onClose, tok
       case 'tokens_json': return `${safeName}-tokens.json`;
       case 'theme_css': return `${safeName}-theme.css`;
       case 'agent_prompt': return `${safeName}-agent-prompt.txt`;
+      case 'slop_audit': return `${safeName}-audit-report.txt`;
       default: return `${safeName}-design.md`;
     }
   };
@@ -127,13 +218,78 @@ export const ExportDrawer: React.FC<ExportDrawerProps> = ({ isOpen, onClose, tok
             <ClipboardText size={14} />
             <span>Agent Prompt</span>
           </button>
+          <button
+            onClick={() => setActiveTab('slop_audit')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 cursor-pointer transition-colors relative ${activeTab === 'slop_audit' ? 'bg-zinc-900 text-teal-400 border border-zinc-800' : 'text-zinc-400 hover:text-zinc-200 border border-transparent'}`}
+          >
+            <ShieldCheck size={14} />
+            <span>Slop Audit</span>
+            {warnCount > 0 && (
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500 animate-pulse ml-0.5" />
+            )}
+          </button>
         </div>
 
         {/* Code Content Scroll View */}
         <div className="flex-1 p-5 overflow-hidden flex flex-col gap-4 bg-zinc-900/40">
-          <div className="flex-1 rounded-xl bg-zinc-950 border border-zinc-900 p-4 overflow-y-auto font-mono text-[11px] leading-relaxed text-zinc-300 relative">
-            <pre className="whitespace-pre-wrap select-text">{getActiveContent()}</pre>
-          </div>
+          {activeTab === 'slop_audit' ? (
+            <div className="flex-1 overflow-y-auto space-y-4">
+              <div className="p-4 bg-zinc-950 border border-zinc-900 rounded-xl flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-teal-500/10 border border-teal-500/20 flex items-center justify-center text-teal-400">
+                    <ShieldCheck size={20} weight="bold" />
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-bold">Taste Audit Engine Report</h3>
+                    <p className="text-[11px] text-zinc-500 font-mono">COMPLIANCE // {7 - warnCount} OF 7 CHECKS PASSED</p>
+                  </div>
+                </div>
+                <div className="w-32 bg-zinc-900 h-2 rounded-full overflow-hidden">
+                  <div 
+                    className="h-full bg-teal-500 transition-all duration-500" 
+                    style={{ width: `${((7 - warnCount) / 7) * 100}%` }}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {auditItems.map((item) => (
+                  <div 
+                    key={item.id}
+                    className="p-4 rounded-xl bg-zinc-950 border border-zinc-900 flex flex-col gap-2.5"
+                  >
+                    <div className="flex justify-between items-start gap-3">
+                      <div>
+                        <h4 className="text-xs font-bold text-zinc-200">{item.name}</h4>
+                        <p className="text-[10px] text-zinc-500 font-mono mt-0.5">Value: {item.value}</p>
+                      </div>
+                      {item.passed ? (
+                        <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 text-[9px] font-bold uppercase tracking-wider border border-emerald-500/20">
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
+                          Pass
+                        </span>
+                      ) : (
+                        <span className="shrink-0 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400 text-[9px] font-bold uppercase tracking-wider border border-amber-500/20 animate-pulse">
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" />
+                          Warn
+                        </span>
+                      )}
+                    </div>
+                    {!item.passed && (
+                      <div className="text-[10px] text-zinc-400 bg-zinc-900/40 p-2.5 rounded-lg border border-zinc-800/50 leading-relaxed">
+                        <span className="text-amber-400 font-bold font-mono">FIX BRIEF // </span>
+                        {item.tip}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ) : (
+            <div className="flex-1 rounded-xl bg-zinc-950 border border-zinc-900 p-4 overflow-y-auto font-mono text-[11px] leading-relaxed text-zinc-300 relative">
+              <pre className="whitespace-pre-wrap select-text">{getActiveContent()}</pre>
+            </div>
+          )}
         </div>
 
         {/* Action Tray */}
