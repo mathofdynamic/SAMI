@@ -1,0 +1,6 @@
+{
+  "name": "SAMI",
+  "description": "A collaborative visual design system studio that translates your taste into design tokens, previews them live across 6 responsive showcase screens, and exports a production-ready DESIGN.md file.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
