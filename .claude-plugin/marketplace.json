@@ -1,0 +1,21 @@
+{
+  "name": "sami",
+  "owner": { "name": "mathofdynamic" },
+  "description": "SAMI - Smart Aesthetic Management Interface. Design-system artifacts for AI coding agents.",
+  "version": "1.0.0",
+  "plugins": [
+    {
+      "name": "sami-design",
+      "source": "./agent-skill",
+      "displayName": "SAMI Design System",
+      "description": "Teach your agent to generate a consistent design system (design tokens, DESIGN.md, theme.css, an agent prompt, and a slop audit) from the SAMI API before building UI.",
+      "version": "1.0.0",
+      "author": { "name": "mathofdynamic" },
+      "homepage": "https://smart-aesthetic-management-interface.pages.dev",
+      "repository": "https://github.com/mathofdynamic/SAMI",
+      "license": "MIT",
+      "keywords": ["design", "design-tokens", "theme", "css", "ui", "design-system"],
+      "category": "productivity"
+    }
+  ]
+}

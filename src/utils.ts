@@ -130,8 +130,158 @@ function rgbToHex(r: number, g: number, b: number): string {
   }).join('');
 }
 
-// Convert design tokens object into a CSS custom properties record for inline styles
-export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): Record<string, string | number> {
+// ---------------------------------------------------------------------------
+// Slop Audit — pure, shared by the studio UI and the agent API. Names/tips are
+// English (canonical for the API export); the UI translates them by `id`.
+// ---------------------------------------------------------------------------
+export interface SlopAuditItem {
+  id: string;
+  name: string;
+  passed: boolean;
+  value: string;
+  tip: string;
+}
+export interface SlopAudit {
+  passed: number;
+  total: number;
+  items: SlopAuditItem[];
+}
+
+export function generateSlopAudit(tokens: DesignTokens): SlopAudit {
+  const satLight = getHexSaturation(tokens.colors.light.accent);
+  const satDark = getHexSaturation(tokens.colors.dark.accent);
+  const accentSatPassed = satLight < 80 && satDark < 80;
+
+  const headingFontLower = tokens.typography.fontHeading.toLowerCase();
+  const bannedFonts = ['inter', 'roboto', 'arial', 'open sans', 'helvetica'];
+  const headingFontPassed = !bannedFonts.some(f => headingFontLower.includes(f));
+
+  const lightBgPure = tokens.colors.light.neutralBg.toLowerCase() === '#ffffff';
+  const lightTextPure = tokens.colors.light.textPrimary.toLowerCase() === '#000000';
+  const darkBgPure = tokens.colors.dark.neutralBg.toLowerCase() === '#000000';
+  const darkTextPure = tokens.colors.dark.textPrimary.toLowerCase() === '#ffffff';
+  const pureColorPassed = !lightBgPure && !lightTextPure && !darkBgPure && !darkTextPure;
+
+  const lightContrast = getContrastRatio(tokens.colors.light.textPrimary, tokens.colors.light.neutralBg);
+  const darkContrast = getContrastRatio(tokens.colors.dark.textPrimary, tokens.colors.dark.neutralBg);
+
+  const buttonContrastLight = getContrastRatio(tokens.colors.light.accent, tokens.colors.light.neutralBg);
+  const buttonContrastDark = getContrastRatio(tokens.colors.dark.accent, tokens.colors.dark.neutralBg);
+  const buttonContrastPassed = buttonContrastLight >= 4.5 && buttonContrastDark >= 4.5;
+
+  const hueLight = getHexHue(tokens.colors.light.accent);
+  const hueDark = getHexHue(tokens.colors.dark.accent);
+  const hueDiff = Math.abs(hueLight - hueDark);
+  const hueDiffNormalized = hueDiff > 180 ? 360 - hueDiff : hueDiff;
+  const singleAccentPassed = hueDiffNormalized <= 30;
+
+  const items: SlopAuditItem[] = [
+    { id: 'accent-saturation', name: 'Accent saturation < 80%', passed: accentSatPassed, value: `Light: ${satLight}%, Dark: ${satDark}%`, tip: 'Reduce accent saturation below 80% to blend beautifully with neutrals.' },
+    { id: 'heading-font', name: 'Premium Heading Font', passed: headingFontPassed, value: tokens.typography.fontHeading, tip: 'Avoid generic fonts like Inter, Roboto, Arial, Open Sans, or Helvetica.' },
+    { id: 'pure-colors', name: 'No pure #000000 or #ffffff', passed: pureColorPassed, value: `Bg: ${tokens.colors.light.neutralBg}/${tokens.colors.dark.neutralBg}`, tip: 'Avoid pure black/white; use soft off-whites and rich charcoals.' },
+    { id: 'light-text-contrast', name: 'Light Text Contrast >= 4.5:1', passed: lightContrast >= 4.5, value: `${lightContrast.toFixed(2)}:1`, tip: 'Increase contrast between text and light background for WCAG AA compliance.' },
+    { id: 'dark-text-contrast', name: 'Dark Text Contrast >= 4.5:1', passed: darkContrast >= 4.5, value: `${darkContrast.toFixed(2)}:1`, tip: 'Increase contrast between text and dark background for WCAG AA compliance.' },
+    { id: 'button-contrast', name: 'Button Text vs Fill Contrast >= 4.5:1', passed: buttonContrastPassed, value: `Light: ${buttonContrastLight.toFixed(2)}:1, Dark: ${buttonContrastDark.toFixed(2)}:1`, tip: 'Ensure the accent button fill and label have high contrast ratio.' },
+    { id: 'single-accent', name: 'Unified Brand Accent Hue', passed: singleAccentPassed, value: `Hue Diff: ${hueDiffNormalized.toFixed(0)}°`, tip: 'Light and Dark accents should share a single cohesive brand hue (diff <= 30°).' },
+  ];
+
+  return { passed: items.filter(i => i.passed).length, total: items.length, items };
+}
+
+// Validate an untrusted (AI-produced) partial token object: keep only
+// well-typed, in-range, valid-hex/enum fields; drop everything else so the
+// generators never receive garbage. Returns a partial safe for buildTokens.
+const COLOR_KEYS = ['primary', 'secondary', 'accent', 'neutralBg', 'neutralSurface', 'neutralBorder', 'textPrimary', 'textSecondary', 'success', 'warning', 'error', 'info'];
+const isHex = (s: any) => typeof s === 'string' && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(s.trim());
+const inRange = (v: any, lo: number, hi: number): number | undefined =>
+  typeof v === 'number' && isFinite(v) ? Math.min(hi, Math.max(lo, v)) : undefined;
+const cleanColors = (c: any) => {
+  if (!c || typeof c !== 'object') return undefined;
+  const out: any = {};
+  for (const k of COLOR_KEYS) if (isHex(c[k])) out[k] = c[k].trim();
+  return Object.keys(out).length ? out : undefined;
+};
+
+export function sanitizePartialTokens(p: any): any {
+  if (!p || typeof p !== 'object') return {};
+  const out: any = {};
+  if (typeof p.appName === 'string') out.appName = p.appName.replace(/[<>]/g, '').slice(0, 40);
+
+  if (p.colors && typeof p.colors === 'object') {
+    const colors: any = {};
+    const l = cleanColors(p.colors.light); const d = cleanColors(p.colors.dark);
+    if (l) colors.light = l; if (d) colors.dark = d;
+    if (Object.keys(colors).length) out.colors = colors;
+  }
+  if (p.typography && typeof p.typography === 'object') {
+    const t: any = {}; const ty = p.typography;
+    for (const f of ['fontHeading', 'fontBody', 'fontMono']) if (typeof ty[f] === 'string') t[f] = ty[f].replace(/[<>]/g, '').slice(0, 40);
+    const sr = inRange(ty.scaleRatio, 1.05, 1.9); if (sr !== undefined) t.scaleRatio = sr;
+    const sb = inRange(ty.sizeBase, 10, 28); if (sb !== undefined) t.sizeBase = Math.round(sb);
+    if (['400', '500', '600', '700', '800'].includes(String(ty.weightHeading))) t.weightHeading = String(ty.weightHeading);
+    if (['300', '400', '500', '600'].includes(String(ty.weightBody))) t.weightBody = String(ty.weightBody);
+    if (typeof ty.letterSpacingHeading === 'string') t.letterSpacingHeading = ty.letterSpacingHeading.slice(0, 12);
+    if (typeof ty.letterSpacingBody === 'string') t.letterSpacingBody = ty.letterSpacingBody.slice(0, 12);
+    const lh = inRange(ty.lineHeightHeading, 0.9, 2); if (lh !== undefined) t.lineHeightHeading = lh;
+    const lb = inRange(ty.lineHeightBody, 1, 2.2); if (lb !== undefined) t.lineHeightBody = lb;
+    if (Object.keys(t).length) out.typography = t;
+  }
+  if (p.shape && typeof p.shape === 'object') {
+    const s: any = {}; const sh = p.shape;
+    const rb = inRange(sh.radiusBase, 0, 40); if (rb !== undefined) s.radiusBase = Math.round(rb);
+    const bw = inRange(sh.borderWidth, 0, 6); if (bw !== undefined) s.borderWidth = Math.round(bw);
+    const si = inRange(sh.shadowIntensity, 0, 100); if (si !== undefined) s.shadowIntensity = Math.round(si);
+    if (isHex(sh.shadowColor)) s.shadowColor = sh.shadowColor.trim();
+    const bb = inRange(sh.backdropBlur, 0, 40); if (bb !== undefined) s.backdropBlur = Math.round(bb);
+    if (Object.keys(s).length) out.shape = s;
+  }
+  if (p.motion && typeof p.motion === 'object') {
+    const m: any = {}; const mo = p.motion;
+    const df = inRange(mo.durationFast, 40, 400); if (df !== undefined) m.durationFast = Math.round(df);
+    const dn = inRange(mo.durationNormal, 80, 800); if (dn !== undefined) m.durationNormal = Math.round(dn);
+    const ds = inRange(mo.durationSlow, 150, 1500); if (ds !== undefined) m.durationSlow = Math.round(ds);
+    if (typeof mo.easing === 'string' && mo.easing.length < 60) m.easing = mo.easing;
+    if (Object.keys(m).length) out.motion = m;
+  }
+  if (p.components && typeof p.components === 'object') {
+    const c: any = {}; const co = p.components;
+    if (['flat', 'double-bezel', 'pill', 'tactile', 'gradient', 'glow', 'glass', 'neumorphic'].includes(co.buttonStyle)) c.buttonStyle = co.buttonStyle;
+    if (['flat', 'bordered', 'elevated', 'double-bezel'].includes(co.cardStyle)) c.cardStyle = co.cardStyle;
+    if (['underlined', 'filled', 'bordered'].includes(co.inputStyle)) c.inputStyle = co.inputStyle;
+    if (Object.keys(c).length) out.components = c;
+  }
+  if (p.dials && typeof p.dials === 'object') {
+    const d: any = {};
+    for (const k of ['variance', 'motion', 'density']) { const v = inRange(p.dials[k], 1, 10); if (v !== undefined) d[k] = Math.round(v); }
+    if (Object.keys(d).length) out.dials = d;
+  }
+  return out;
+}
+
+// Deep-merge a partial token object over a complete base so every field the
+// generators read is present. Mirrors the studio's localStorage merge.
+export function buildTokens(partial: any, base: DesignTokens): DesignTokens {
+  const p = partial || {};
+  return {
+    ...base,
+    ...p,
+    appName: p.appName || base.appName,
+    colors: {
+      light: { ...base.colors.light, ...(p.colors?.light) },
+      dark: { ...base.colors.dark, ...(p.colors?.dark) },
+    },
+    typography: { ...base.typography, ...(p.typography) },
+    shape: { ...base.shape, ...(p.shape) },
+    motion: { ...base.motion, ...(p.motion) },
+    components: { ...base.components, ...(p.components) },
+    dials: { ...base.dials, ...(p.dials) },
+  };
+}
+
+// Convert design tokens object into a CSS custom properties record for inline styles.
+// `rtl` injects a Vazirmatn fallback into every font stack so Farsi text always has
+// a Persian-capable face even when the chosen family is a Latin-only Google font.
+export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark', rtl = false): Record<string, string | number> {
   if (!tokens) {
     return {};
   }
@@ -200,9 +350,9 @@ export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): R
     '--color-error': colors.error || '#ef4444',
     '--color-info': colors.info || '#3b82f6',
 
-    '--font-heading': `"${typography.fontHeading || 'Outfit'}", system-ui, sans-serif`,
-    '--font-body': `"${typography.fontBody || 'Plus Jakarta Sans'}", system-ui, sans-serif`,
-    '--font-mono': `"${typography.fontMono || 'JetBrains Mono'}", monospace`,
+    '--font-heading': `"${typography.fontHeading || 'Outfit'}"${rtl ? ', "Vazirmatn"' : ''}, system-ui, sans-serif`,
+    '--font-body': `"${typography.fontBody || 'Plus Jakarta Sans'}"${rtl ? ', "Vazirmatn"' : ''}, system-ui, sans-serif`,
+    '--font-mono': `"${typography.fontMono || 'JetBrains Mono'}"${rtl ? ', "Vazirmatn"' : ''}, monospace`,
     
     '--font-size-base': `${typography.sizeBase || 15}px`,
     '--font-weight-heading': typography.weightHeading || '600',
@@ -229,6 +379,31 @@ export function tokensToCssVars(tokens: DesignTokens, mode: 'light' | 'dark'): R
   } as Record<string, string | number>;
 }
 
+// Single source of truth for what each Taste Dial value means, reused by the
+// DESIGN.md export, the agent prompt, and the in-studio Dials explainer so the
+// wording can never drift between them.
+export function describeDial(kind: 'variance' | 'motion' | 'density', value: number): string {
+  if (kind === 'variance') {
+    const d = value === 1 ? 'completely symmetric/predictable'
+      : value <= 4 ? 'mostly symmetric/predictable'
+      : value <= 7 ? 'partially artsy/asymmetric'
+      : 'highly artsy/asymmetric';
+    return `${d} visual composition`;
+  }
+  if (kind === 'motion') {
+    const d = value === 1 ? 'completely static'
+      : value <= 4 ? 'minimal visual motion'
+      : value <= 7 ? 'cinematic transitions'
+      : 'highly cinematic/physics-driven';
+    return `${d} animations`;
+  }
+  const d = value === 1 ? 'extremely airy/art-gallery'
+    : value <= 4 ? 'airy/minimal layout spacing'
+    : value <= 7 ? 'dense/compact layout spacing'
+    : 'highly dense cockpit-style';
+  return `${d} layout`;
+}
+
 // Generate human-readable DESIGN.md
 export function generateDesignMd(tokens: DesignTokens): string {
   const { colors, typography, shape, motion, components } = tokens;
@@ -240,9 +415,9 @@ export function generateDesignMd(tokens: DesignTokens): string {
   const motionVal = tokens.dials?.motion ?? 6;
   const densityVal = tokens.dials?.density ?? 4;
 
-  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${varianceVal === 1 ? "completely symmetric/predictable" : varianceVal <= 4 ? "mostly symmetric/predictable" : varianceVal <= 7 ? "partially artsy/asymmetric" : "highly artsy/asymmetric"} visual composition)`;
-  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${motionVal === 1 ? "completely static" : motionVal <= 4 ? "minimal visual motion" : motionVal <= 7 ? "cinematic transitions" : "highly cinematic/physics-driven"} active animations)`;
-  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${densityVal === 1 ? "extremely airy/art-gallery" : densityVal <= 4 ? "airy/minimal layout spacing" : densityVal <= 7 ? "dense/compact layout spacing" : "highly dense cockpit-style"} page visually)`;
+  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${describeDial('variance', varianceVal)})`;
+  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${describeDial('motion', motionVal)})`;
+  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${describeDial('density', densityVal)})`;
 
   const evocativeParagraph = `This design system establishes a ${colors.light.neutralBg.toLowerCase() === '#f4f4f0' || colors.dark.neutralBg.toLowerCase() === '#0a0a0a' ? 'striking industrial/brutalist' : 'highly polished agency-tier'} atmosphere for **${tokens.appName}**. Driven by a design variance of ${varianceVal}/10, it rejects boring symmetric templates in favor of rich layout rhythm, asymmetric grids, and tactile micro-interactions. The typography layers the geometric tracking of \`${typography.fontHeading}\` over the highly legible \`${typography.fontBody}\`, framed by precise \`${components.buttonStyle}\` interaction targets and \`${components.cardStyle}\` elevation cells. It moves with a cinematic tempo of ${motionVal}/10, balancing responsive spring physics against a structured layout density of ${densityVal}/10 to maintain spacious, breathtaking negative space or dense functional cockpit utility as needed.`;
 
@@ -536,9 +711,9 @@ export function generateAgentPrompt(tokens: DesignTokens): string {
   const motionVal = tokens.dials?.motion ?? 6;
   const densityVal = tokens.dials?.density ?? 4;
 
-  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${varianceVal === 1 ? "completely symmetric/predictable" : varianceVal <= 4 ? "mostly symmetric/predictable" : varianceVal <= 7 ? "partially artsy/asymmetric" : "highly artsy/asymmetric"} visual composition)`;
-  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${motionVal === 1 ? "completely static" : motionVal <= 4 ? "minimal visual motion" : motionVal <= 7 ? "cinematic transitions" : "highly cinematic/physics-driven"} active animations)`;
-  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${densityVal === 1 ? "extremely airy/art-gallery" : densityVal <= 4 ? "airy/minimal layout spacing" : densityVal <= 7 ? "dense/compact layout spacing" : "highly dense cockpit-style"} page visually)`;
+  const varianceExp = `Variance: ${varianceVal}/10 (Chosen setting indicates ${describeDial('variance', varianceVal)})`;
+  const motionExp = `Motion: ${motionVal}/10 (Chosen setting indicates ${describeDial('motion', motionVal)})`;
+  const densityExp = `Density: ${densityVal}/10 (Chosen setting indicates ${describeDial('density', densityVal)})`;
 
   return `You are tasked with building a web application named "${tokens.appName}".
 Please follow the strict visual design tokens specified below as your single source of truth.

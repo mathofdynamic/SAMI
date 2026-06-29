@@ -51,7 +51,7 @@ export interface DesignTokens {
   };
   // Components Configuration (token overrides / styling choices)
   components: {
-    buttonStyle: 'flat' | 'double-bezel' | 'pill' | 'tactile';
+    buttonStyle: 'flat' | 'double-bezel' | 'pill' | 'tactile' | 'gradient' | 'glow' | 'glass' | 'neumorphic';
     cardStyle: 'flat' | 'bordered' | 'elevated' | 'double-bezel';
     inputStyle: 'underlined' | 'filled' | 'bordered';
   };

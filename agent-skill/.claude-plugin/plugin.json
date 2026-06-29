@@ -1,0 +1,9 @@
+{
+  "name": "sami-design",
+  "description": "Generate a consistent design system via the SAMI API: DESIGN.md, design-tokens.json, theme.css, an agent prompt, and a slop audit.",
+  "version": "1.0.0",
+  "author": { "name": "mathofdynamic" },
+  "homepage": "https://smart-aesthetic-management-interface.pages.dev",
+  "repository": "https://github.com/mathofdynamic/SAMI",
+  "license": "MIT"
+}

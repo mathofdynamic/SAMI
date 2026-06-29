@@ -4,7 +4,7 @@ import React from 'react';
 interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
   variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'ghost';
   size?: 'xs' | 'sm' | 'md' | 'lg';
-  buttonStyle?: 'flat' | 'double-bezel' | 'pill' | 'tactile';
+  buttonStyle?: 'flat' | 'double-bezel' | 'pill' | 'tactile' | 'gradient' | 'glow' | 'glass' | 'neumorphic';
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -35,6 +35,8 @@ export const Button: React.FC<ButtonProps> = ({
     radiusClass = 'rounded-full';
   } else if (buttonStyle === 'tactile' || buttonStyle === 'flat') {
     radiusClass = 'rounded-[var(--radius-sm)]';
+  } else if (buttonStyle === 'glass' || buttonStyle === 'neumorphic') {
+    radiusClass = 'rounded-[var(--radius-lg)]';
   }
 
   // Variant Coloring
@@ -46,10 +48,28 @@ export const Button: React.FC<ButtonProps> = ({
     ghost: 'bg-transparent text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--color-border)]/10',
   };
 
+  // Creative archetypes paint their own background from the current palette, so
+  // they bypass the variant fill above (otherwise the two backgrounds collide).
+  const customFill =
+    buttonStyle === 'gradient' || buttonStyle === 'glow' ||
+    buttonStyle === 'glass' || buttonStyle === 'neumorphic';
+
   // Specific style presets overrides
   let styleOverrides = '';
   if (buttonStyle === 'tactile') {
     styleOverrides = 'border-[var(--border-width)] border-[var(--color-primary)] shadow-[3px_3px_0px_0px_var(--color-primary)] hover:translate-x-[-1px] hover:translate-y-[-1px] hover:shadow-[4px_4px_0px_0px_var(--color-primary)] active:translate-x-[2px] active:translate-y-[2px] active:shadow-none transition-all';
+  } else if (buttonStyle === 'gradient') {
+    // Brand-to-accent diagonal sweep.
+    styleOverrides = 'border-none text-[var(--color-bg)] bg-[linear-gradient(135deg,var(--color-primary),var(--color-accent))] shadow-[var(--shadow-ambient)] hover:brightness-110';
+  } else if (buttonStyle === 'glow') {
+    // Accent fill with a soft neon halo.
+    styleOverrides = 'border-none bg-[var(--color-accent)] text-[var(--color-bg)] shadow-[0_0_20px_-2px_var(--color-accent)] hover:shadow-[0_0_28px_0px_var(--color-accent)] hover:brightness-105';
+  } else if (buttonStyle === 'glass') {
+    // Frosted translucent surface (color-mix keeps it palette-driven).
+    styleOverrides = 'text-[var(--text-primary)] bg-[color-mix(in_srgb,var(--color-surface)_55%,transparent)] border border-[color-mix(in_srgb,var(--color-border)_80%,transparent)] backdrop-blur-md hover:bg-[color-mix(in_srgb,var(--color-surface)_78%,transparent)]';
+  } else if (buttonStyle === 'neumorphic') {
+    // Soft extruded surface with dual light/shadow, pressing inward on active.
+    styleOverrides = 'border-none bg-[var(--color-surface)] text-[var(--text-primary)] shadow-[4px_4px_10px_-2px_rgba(0,0,0,0.25),-4px_-4px_10px_-2px_color-mix(in_srgb,var(--color-surface)_55%,#ffffff)] hover:shadow-[2px_2px_7px_-2px_rgba(0,0,0,0.25),-2px_-2px_7px_-2px_color-mix(in_srgb,var(--color-surface)_55%,#ffffff)] active:shadow-[inset_3px_3px_6px_-2px_rgba(0,0,0,0.3)]';
   } else if (buttonStyle === 'double-bezel') {
     // Return wrapped element
     return (
@@ -66,7 +86,7 @@ export const Button: React.FC<ButtonProps> = ({
 
   return (
     <button
-      className={`${baseClass} ${sizeClasses[size]} ${radiusClass} ${variantClasses[variant]} ${styleOverrides} ${className}`}
+      className={`${baseClass} ${sizeClasses[size]} ${radiusClass} ${customFill ? '' : variantClasses[variant]} ${styleOverrides} ${className}`}
       style={{
         transitionDuration: 'var(--motion-fast)',
         transitionTimingFunction: 'var(--motion-easing)',

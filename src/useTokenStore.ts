@@ -130,10 +130,16 @@ export function useTokenStore() {
     });
   }, []);
 
-  // Set active preset tracking id
+  // Set active preset tracking id (used by resetToPreset)
   const setActivePresetId = useCallback((id: string) => {
     localStorage.setItem('sami_active_preset_id', id);
   }, []);
+
+  // Derive the active preset by value (ignoring appName). Returns null = "Custom"
+  // once the user edits tokens away from any preset. Robust across undo/redo.
+  const norm = (t: DesignTokens) => JSON.stringify({ ...t, appName: '' });
+  const presentNorm = norm(history.present);
+  const activePresetId = THEME_PRESETS.find(p => norm(p.tokens) === presentNorm)?.id ?? null;
 
   return {
     tokens: history.present,
@@ -144,5 +150,6 @@ export function useTokenStore() {
     canRedo: history.future.length > 0,
     resetToPreset,
     setActivePresetId,
+    activePresetId,
   };
 }

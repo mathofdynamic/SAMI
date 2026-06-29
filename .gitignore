@@ -6,3 +6,8 @@ coverage/
 *.log
 .env*
 !.env.example
+.wrangler/
+assets/.aistudio/
+
+# personal source photo (not for the public repo)
+sami-photo.jpg

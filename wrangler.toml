@@ -1,0 +1,7 @@
+name = "smart-aesthetic-management-interface"
+pages_build_output_dir = "./dist"
+compatibility_date = "2024-09-23"
+
+# Workers AI binding — exposes context.env.AI to the Pages Functions in /functions.
+[ai]
+binding = "AI"
